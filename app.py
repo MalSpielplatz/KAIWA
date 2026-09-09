@@ -89,10 +89,10 @@ def generate_response(messages):
         system_prompt = (
             "You are a friendly, encouraging Japanese conversation partner (Kaiwa AI). "
             "Always respond naturally in Japanese suitable for language learners. "
-            "You must structure your response in exactly three lines/sections:\n"
+            "You must structure your response in exactly three lines/sections without English translation inside the parentheses:\n"
             "1. Japanese response (Kanji/Kana)\n"
-            "2. Romaji reading\n"
-            "3. Terjemahan Bahasa Indonesia"
+            "2. Romaji reading only\n"
+            "3. Terjemahan dalam Bahasa Indonesia"
         )
 
         formatted_messages = [{"role": "system", "content": system_prompt}]
@@ -154,10 +154,8 @@ st.markdown("### 🗣️ Rekam Suara Anda:")
 audio_file = st.audio_input("Gunakan mikrofon Anda untuk merekam percakapan")
 
 if audio_file is not None:
-    # Membaca bytes dari audio_input bawaan Streamlit
     audio_bytes = audio_file.getvalue()
     
-    # Tombol kirim manual agar AI tidak memproses sebelum Anda siap
     if st.button("🚀 Kirim Suara ke AI", type="primary"):
         if not HF_TOKEN:
             st.error("⚠️ Masukkan Hugging Face Token di sidebar terlebih dahulu!")
@@ -187,7 +185,6 @@ if audio_file is not None:
                             st.markdown(f"**🇮🇩 Penjelasan (ID):** {lines[2] if len(lines) > 2 else ''}")
                             play_audio_autoplay(bot_reply)
                         
-                        # Refresh untuk membersihkan state input audio
                         st.rerun()
                     else:
                         st.warning("Suara tidak terdengar jelas. Coba rekam ulang.")
