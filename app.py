@@ -78,7 +78,7 @@ def transcribe_audio(audio_bytes):
     except Exception as e:
         return {"error": str(e)}
 
-# Function: LLM Response dengan format terstruktur dan terjemahan Bahasa Indonesia (tanpa bahasa Inggris)
+# Function: LLM Response (Kembali menggunakan struktur system prompt natural yang fleksibel)
 def generate_response(messages):
     if not HF_TOKEN:
         return "Error: Token Hugging Face belum terpasang."
@@ -88,11 +88,7 @@ def generate_response(messages):
 
         system_prompt = (
             "You are a friendly, encouraging Japanese conversation partner (Kaiwa AI). "
-            "Always respond naturally in Japanese suitable for language learners. "
-            "You must structure your response in exactly three lines/sections:\n"
-            "1. Japanese response in Kanji/Kana, followed immediately by its Indonesian translation inside parentheses (e.g., [Kalimat Jepang] (Terjemahan Bahasa Indonesia))\n"
-            "2. Romaji reading only\n"
-            "3. Terjemahan atau penjelasan tambahan dalam Bahasa Indonesia"
+            "Always respond naturally in Japanese suitable for language learners, and always ask a follow-up question to keep the conversation going. "
         )
 
         formatted_messages = [{"role": "system", "content": system_prompt}]
@@ -132,20 +128,14 @@ def play_audio_autoplay(text_ja):
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {"role": "system", "content": "System Initialized"},
-        {"role": "assistant", "content": "こんにちは！一緒に日本語を練習しましょう！ (Halo! Mari kita berlatih bahasa Jepang bersama-sama!)\nKonnichiwa! Issho ni Nihongo wo renshuu shimashou!\nHalo! Mari kita berlatih bahasa Jepang bersama-sama!"}
+        {"role": "assistant", "content": "こんにちは！一緒に日本語を練習しましょう！\n(Konnichiwa! Issho ni Nihongo wo renshuu shimashou! / Halo! Mari kita berlatih bahasa Jepang bersama-sama!)"}
     ]
 
-# Tampilkan Chat History dengan pemisahan visual yang rapi
+# Tampilkan Chat History dengan format asli
 for msg in st.session_state.messages:
     if msg["role"] != "system":
         with st.chat_message(msg["role"]):
-            if msg["role"] == "assistant":
-                lines = msg["content"].split("\n")
-                st.markdown(f"**🇯🇵 Jepang:** {lines[0] if len(lines) > 0 else ''}")
-                st.markdown(f"**罗马字 Romaji:** {lines[1] if len(lines) > 1 else ''}")
-                st.markdown(f"**🇮🇩 Penjelasan (ID):** {lines[2] if len(lines) > 2 else ''}")
-            else:
-                st.write(msg["content"])
+            st.write(msg["content"])
 
 st.divider()
 
@@ -179,10 +169,7 @@ if audio_file is not None:
                         st.session_state.messages.append({"role": "assistant", "content": bot_reply})
                         
                         with st.chat_message("assistant"):
-                            lines = bot_reply.split("\n")
-                            st.markdown(f"**🇯🇵 Jepang:** {lines[0] if len(lines) > 0 else ''}")
-                            st.markdown(f"**罗马字 Romaji:** {lines[1] if len(lines) > 1 else ''}")
-                            st.markdown(f"**🇮🇩 Penjelasan (ID):** {lines[2] if len(lines) > 2 else ''}")
+                            st.write(bot_reply)
                             play_audio_autoplay(bot_reply)
                         
                         st.rerun()
