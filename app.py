@@ -46,8 +46,8 @@ st.sidebar.write("5. AI akan menjawab dalam teks & memutar suara balasan!")
 # Model Endpoints
 STT_MODEL = "openai/whisper-large-v3-turbo" 
 
-# Menggunakan Qwen2.5-7B-Instruct yang sangat natural untuk bahasa Jepang
-LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"
+# Menggunakan model Llama 3.1 8B Instruct yang didukung penuh oleh Inference Providers serverless Hugging Face
+LLM_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
 
 # Function: Speech-to-Text via Router Endpoint (Tanpa /v1/ dan Paksa Content-Type)
 def transcribe_audio(audio_bytes):
@@ -84,14 +84,14 @@ def transcribe_audio(audio_bytes):
     except Exception as e:
         return {"error": str(e)}
 
-# Function: LLM Response (menggunakan InferenceClient dengan provider otomatis)
+# Function: LLM Response (menggunakan provider eksplisit agar tembus serverless gateway)
 def generate_response(messages):
     if not HF_TOKEN:
         return "Error: Token Hugging Face belum terpasang."
     
     try:
-        # Menggunakan provider="auto" agar klien mencari jalur inference yang aktif secara otomatis
-        client = InferenceClient(provider="auto", api_key=HF_TOKEN)
+        # Mengarahkan langsung ke provider partner serverless yang aktif (misal: Together atau Groq)
+        client = InferenceClient(provider="together", api_key=HF_TOKEN)
         
         system_prompt = (
             "You are a friendly, encouraging Japanese conversation partner (Kaiwa AI). "
