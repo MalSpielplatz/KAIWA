@@ -61,7 +61,9 @@ def transcribe_audio(audio_bytes):
             audio=audio_bytes,
             model=STT_MODEL
         )
-        return {"text": res}
+        if hasattr(res, "text"):
+            return {"text": res.text}
+        return {"text": str(res)}
     except Exception as e:
         return {"error": str(e)}
 
@@ -134,8 +136,8 @@ audio_bytes = audio_recorder(
     icon_size="2x"
 )
 
-# Process Audio (Hanya diproses jika data audio tidak kosong)
-if audio_bytes is not None and len(audio_bytes) > 0:
+# Process Audio
+if audio_bytes:
     if not HF_TOKEN:
         st.error("⚠️ Masukkan Hugging Face Token di sidebar terlebih dahulu!")
     else:
@@ -144,24 +146,19 @@ if audio_bytes is not None and len(audio_bytes) > 0:
             
             if isinstance(stt_result, dict) and "error" in stt_result:
                 st.error(f"⚠️ {stt_result['error']}")
-            elif isinstance(stt_result, dict) and "text" in stt_result and stt_result["text"]:
-                user_speech = stt_result["text"]
-                if hasattr(user_speech, "text"):
-                    user_speech = user_speech.text
-
-                user_speech = str(user_speech).strip()
+            elif isinstance(stt_result, dict) and "text" in stt_result and stt_result["text"].strip():
+                user_speech = stt_result["text"].strip()
                 
-                if user_speech:
-                    st.session_state.messages.append({"role": "user", "content": user_speech})
-                    with st.chat_message("user"):
-                        st.write(f"🗣️ *\"{user_speech}\"*")
+                st.session_state.messages.append({"role": "user", "content": user_speech})
+                with st.chat_message("user"):
+                    st.write(f"🗣️ *\"{user_speech}\"*")
 
-                    with st.spinner("🤖 AI sedang memikirkan balasan..."):
-                        bot_reply = generate_response(st.session_state.messages)
+                with st.spinner("🤖 AI sedang memikirkan balasan..."):
+                    bot_reply = generate_response(st.session_state.messages)
 
-                    st.session_state.messages.append({"role": "assistant", "content": bot_reply})
-                    with st.chat_message("assistant"):
-                        st.write(bot_reply)
-                        play_audio_autoplay(bot_reply)
-                else:
-                    st.warning("Suara tidak terdeteksi atau terlalu singkat. Coba rekam ulang.")
+                st.session_state.messages.append({"role": "assistant", "content": bot_reply})
+                with st.chat_message("assistant"):
+                    st.write(bot_reply)
+                    play_audio_autoplay(bot_reply)
+            else:
+                st.warning("Suara tidak terdeteksi. Coba rekam ulang.")
