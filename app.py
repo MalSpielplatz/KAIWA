@@ -46,9 +46,8 @@ st.sidebar.write("5. AI akan menjawab dalam teks & memutar suara balasan!")
 # Model Endpoints
 STT_MODEL = "openai/whisper-large-v3-turbo" 
 
-# Model LLM diubah ke Zephyr. 
-# Model ini dijamin 100% gratis, stabil di HF Serverless, dan pintar.
-LLM_MODEL = "HuggingFaceH4/zephyr-7b-beta" 
+# Menggunakan Llama-3-8B-Instruct (Multilingual kuat dan stabil di serverless HF)
+LLM_MODEL = "meta-llama/Meta-Llama-3-8B-Instruct" 
 
 # Function: Speech-to-Text via Router Endpoint (Tanpa /v1/ dan Paksa Content-Type)
 def transcribe_audio(audio_bytes):
