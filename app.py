@@ -3,7 +3,6 @@ import io
 import base64
 import requests
 from gtts import gTTS
-from audio_recorder_streamlit import audio_recorder
 from huggingface_hub import InferenceClient
 
 # Config Halaman
@@ -14,7 +13,7 @@ st.set_page_config(
 )
 
 st.title("🎙️ Speech-to-Speech Japanese Kaiwa")
-st.caption("Ngobrol bahasa Jepang langsung pakai suara secara real-time!")
+st.caption("Ngobrol bahasa Jepang langsung pakai suara dengan penjelasan Bahasa Indonesia!")
 
 # --- SIDEBAR CONFIG ---
 st.sidebar.header("⚙️ Konfigurasi & Status")
@@ -38,18 +37,16 @@ else:
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("💡 Cara Pakai:")
-st.sidebar.write("1. Pastikan API Token sudah terpasang.")
-st.sidebar.write("2. Klik ikon Mikrofon untuk mulai merekam suara.")
-st.sidebar.write("3. Bicara dalam Bahasa Jepang (*misal: Konnichiwa*).")
-st.sidebar.write("4. Klik ikon Stop untuk mengirim.")
-st.sidebar.write("5. AI akan menjawab dalam teks (Jepang, Romaji, & Terjemahan Bahasa Indonesia) & memutar suara balasan!")
+st.sidebar.write("1. Rekam suara Anda menggunakan perekam di bawah.")
+st.sidebar.write("2. Dengarkan hasil rekaman, lalu klik tombol Kirim.")
+st.sidebar.write("3. AI akan menjawab dalam Bahasa Jepang beserta penjelasan Romaji & Terjemahan Bahasa Indonesia.")
 
 # --- MODEL / PROVIDER CONFIG ---
 STT_MODEL = "openai/whisper-large-v3-turbo"
 LLM_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
 LLM_PROVIDER = "featherless-ai"
 
-# Function: Speech-to-Text via Router Endpoint (raw bytes, hf-inference)
+# Function: Speech-to-Text via Router Endpoint
 def transcribe_audio(audio_bytes):
     if not HF_TOKEN:
         return {"error": "Token Hugging Face belum terpasang."}
@@ -66,12 +63,10 @@ def transcribe_audio(audio_bytes):
 
         if response.status_code == 200:
             result = response.json()
-
             if isinstance(result, dict) and "text" in result:
                 return {"text": result["text"]}
             elif isinstance(result, list) and len(result) > 0 and "text" in result[0]:
                 return {"text": result[0]["text"]}
-
             return {"text": str(result)}
         else:
             try:
@@ -80,11 +75,10 @@ def transcribe_audio(audio_bytes):
             except Exception:
                 error_msg = f"HTTP Error {response.status_code}: {response.text}"
             return {"error": str(error_msg)}
-
     except Exception as e:
         return {"error": str(e)}
 
-# Function: LLM Response (InferenceClient dengan provider eksplisit & Bahasa Indonesia)
+# Function: LLM Response dengan format terstruktur Bahasa Indonesia
 def generate_response(messages):
     if not HF_TOKEN:
         return "Error: Token Hugging Face belum terpasang."
@@ -95,9 +89,10 @@ def generate_response(messages):
         system_prompt = (
             "You are a friendly, encouraging Japanese conversation partner (Kaiwa AI). "
             "Always respond naturally in Japanese suitable for language learners. "
-            "Line 1: Japanese response (Kanji/Kana).\n"
-            "Line 2: Romaji reading.\n"
-            "Line 3: Terjemahan dalam Bahasa Indonesia."
+            "You must structure your response in exactly three lines/sections:\n"
+            "1. Japanese response (Kanji/Kana)\n"
+            "2. Romaji reading\n"
+            "3. Terjemahan Bahasa Indonesia"
         )
 
         formatted_messages = [{"role": "system", "content": system_prompt}]
@@ -140,49 +135,61 @@ if "messages" not in st.session_state:
         {"role": "assistant", "content": "こんにちは！一緒に日本語を練習しましょう！\n(Konnichiwa! Issho ni Nihongo wo renshuu shimashou!)\nHalo! Mari kita berlatih bahasa Jepang bersama-sama!"}
     ]
 
-# Tampilkan Chat History
+# Tampilkan Chat History dengan pemisahan visual yang rapi
 for msg in st.session_state.messages:
     if msg["role"] != "system":
         with st.chat_message(msg["role"]):
-            st.write(msg["content"])
+            if msg["role"] == "assistant":
+                lines = msg["content"].split("\n")
+                st.markdown(f"**🇯🇵 Jepang:** {lines[0] if len(lines) > 0 else ''}")
+                st.markdown(f"**罗马字 Romaji:** {lines[1] if len(lines) > 1 else ''}")
+                st.markdown(f"**🇮🇩 Penjelasan (ID):** {lines[2] if len(lines) > 2 else ''}")
+            else:
+                st.write(msg["content"])
 
 st.divider()
 
-# Audio Recorder Container (Kembali menggunakan model asli yang stabil)
-st.markdown("### 🗣️ Bicara Sekarang:")
-audio_bytes = audio_recorder(
-    text="Klik untuk Merekam",
-    recording_color="#e74c3c",
-    neutral_color="#2ecc71",
-    icon_size="2x"
-)
+# Kontrol Perekaman Suara (Turn On / Turn Off manual sebelum dikirim)
+st.markdown("### 🗣️ Rekam Suara Anda:")
+audio_file = st.audio_input("Gunakan mikrofon Anda untuk merekam percakapan")
 
-# Process Audio
-if audio_bytes:
-    if not HF_TOKEN:
-        st.error("⚠️ Masukkan Hugging Face Token di sidebar terlebih dahulu!")
-    else:
-        with st.spinner("🎙️ Mengubah suara ke teks..."):
-            stt_result = transcribe_audio(audio_bytes)
+if audio_file is not None:
+    # Membaca bytes dari audio_input bawaan Streamlit
+    audio_bytes = audio_file.getvalue()
+    
+    # Tombol kirim manual agar AI tidak memproses sebelum Anda siap
+    if st.button("🚀 Kirim Suara ke AI", type="primary"):
+        if not HF_TOKEN:
+            st.error("⚠️ Masukkan Hugging Face Token di sidebar terlebih dahulu!")
+        else:
+            with st.spinner("🎙️ Menerjemahkan suara Anda..."):
+                stt_result = transcribe_audio(audio_bytes)
 
-            if isinstance(stt_result, dict) and "error" in stt_result:
-                st.error(f"⚠️ {stt_result['error']}")
-            elif isinstance(stt_result, dict) and stt_result.get("text"):
-                user_speech = stt_result["text"].strip()
+                if isinstance(stt_result, dict) and "error" in stt_result:
+                    st.error(f"⚠️ {stt_result['error']}")
+                elif isinstance(stt_result, dict) and stt_result.get("text"):
+                    user_speech = stt_result["text"].strip()
 
-                if user_speech:
-                    st.session_state.messages.append({"role": "user", "content": user_speech})
-                    with st.chat_message("user"):
-                        st.write(f"🗣️ *\"{user_speech}\"*")
+                    if user_speech:
+                        st.session_state.messages.append({"role": "user", "content": user_speech})
+                        with st.chat_message("user"):
+                            st.write(f"🗣️ *\"{user_speech}\"*")
 
-                    with st.spinner("🤖 AI sedang memikirkan balasan..."):
-                        bot_reply = generate_response(st.session_state.messages)
+                        with st.spinner("🤖 AI sedang menyusun jawaban..."):
+                            bot_reply = generate_response(st.session_state.messages)
 
-                    st.session_state.messages.append({"role": "assistant", "content": bot_reply})
-                    with st.chat_message("assistant"):
-                        st.write(bot_reply)
-                        play_audio_autoplay(bot_reply)
+                        st.session_state.messages.append({"role": "assistant", "content": bot_reply})
+                        
+                        with st.chat_message("assistant"):
+                            lines = bot_reply.split("\n")
+                            st.markdown(f"**🇯🇵 Jepang:** {lines[0] if len(lines) > 0 else ''}")
+                            st.markdown(f"**罗马字 Romaji:** {lines[1] if len(lines) > 1 else ''}")
+                            st.markdown(f"**🇮🇩 Penjelasan (ID):** {lines[2] if len(lines) > 2 else ''}")
+                            play_audio_autoplay(bot_reply)
+                        
+                        # Refresh untuk membersihkan state input audio
+                        st.rerun()
+                    else:
+                        st.warning("Suara tidak terdengar jelas. Coba rekam ulang.")
                 else:
-                    st.warning("Suara tidak terdeteksi. Coba rekam ulang.")
-            else:
-                st.warning("Gagal memproses suara. Coba rekam ulang.")
+                    st.warning("Gagal memproses suara. Coba rekam ulang.")
