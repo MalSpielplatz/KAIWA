@@ -1,7 +1,6 @@
 import streamlit as st
 import io
 import base64
-import requests
 from gtts import gTTS
 from audio_recorder_streamlit import audio_recorder
 from huggingface_hub import InferenceClient
@@ -50,26 +49,25 @@ st.sidebar.markdown("""
 STT_MODEL = "openai/whisper-large-v3-turbo"
 LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 
-# Function: Speech-to-Text via Direct HTTP Request dengan Explicit Content-Type
+# Function: Speech-to-Text via InferenceClient (dengan io.BytesIO)
 def transcribe_audio(audio_bytes):
     if not HF_TOKEN:
         return {"error": "Token Hugging Face belum terpasang."}
     
-    api_url = f"https://api-inference.huggingface.co/models/{STT_MODEL}"
-    headers = {
-        "Authorization": f"Bearer {HF_TOKEN}",
-        "Content-Type": "audio/wav"
-    }
-    
     try:
-        response = requests.post(api_url, headers=headers, data=audio_bytes)
-        result = response.json()
+        client = InferenceClient(token=HF_TOKEN)
         
-        if response.status_code == 200:
-            return {"text": result.get("text", "")}
-        else:
-            error_msg = result.get("error", f"HTTP {response.status_code}")
-            return {"error": str(error_msg)}
+        # Konversi bytes murni ke file-like object agar SDK mengenali formatnya
+        audio_file = io.BytesIO(audio_bytes)
+        
+        res = client.automatic_speech_recognition(
+            audio=audio_file,
+            model=STT_MODEL
+        )
+        
+        if hasattr(res, "text"):
+            return {"text": res.text}
+        return {"text": str(res)}
     except Exception as e:
         return {"error": str(e)}
 
@@ -78,7 +76,7 @@ def generate_response(messages):
     if not HF_TOKEN:
         return "Error: Token Hugging Face belum terpasang."
     
-    client = InferenceClient(api_key=HF_TOKEN)
+    client = InferenceClient(token=HF_TOKEN)
     
     system_prompt = (
         "You are a friendly, encouraging Japanese conversation partner (Kaiwa AI). "
