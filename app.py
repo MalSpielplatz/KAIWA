@@ -1,7 +1,6 @@
 import streamlit as st
 import io
 import base64
-import requests
 from gtts import gTTS
 from audio_recorder_streamlit import audio_recorder
 from huggingface_hub import InferenceClient
@@ -44,39 +43,28 @@ st.sidebar.write("4. Klik ikon Stop untuk mengirim.")
 st.sidebar.write("5. AI akan menjawab dalam teks & memutar suara balasan!")
 
 # Model Endpoints
-STT_MODEL = "openai/whisper-small"
+STT_MODEL = "openai/whisper-large-v3-turbo"
 LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 
-# Function: Speech-to-Text via Router Endpoint Baru
+# Function: Speech-to-Text via InferenceClient (Lebih Ringkas & Stabil)
 def transcribe_audio(audio_bytes):
     if not HF_TOKEN:
         return {"error": "Token Hugging Face belum terpasang."}
     
-    # Domain router aktif Hugging Face
-    api_url = f"https://router.huggingface.co/hf-inference/v1/models/{STT_MODEL}"
-    headers = {
-        "Authorization": f"Bearer {HF_TOKEN}",
-        "Content-Type": "audio/wav"
-    }
-    
     try:
-        response = requests.post(api_url, headers=headers, data=audio_bytes)
+        # Inisialisasi SDK InferenceClient
+        client = InferenceClient(api_key=HF_TOKEN)
         
-        if response.status_code == 200:
-            result = response.json()
-            if isinstance(result, dict) and "text" in result:
-                return {"text": result["text"]}
-            return {"text": str(result)}
-        else:
-            try:
-                err_data = response.json()
-                error_msg = err_data.get("error", f"HTTP {response.status_code}")
-            except Exception:
-                error_msg = f"HTTP Error {response.status_code}: {response.text}"
-            return {"error": str(error_msg)}
+        # Panggil tugas STT secara instan
+        result = client.automatic_speech_recognition(
+            audio=audio_bytes, 
+            model=STT_MODEL
+        )
+        
+        return {"text": result.text}
             
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"Error STT: {str(e)}"}
 
 # Function: LLM Response (Qwen via SDK Chat Completion)
 def generate_response(messages):
