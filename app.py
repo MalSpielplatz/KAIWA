@@ -1,6 +1,7 @@
 import streamlit as st
 import io
 import base64
+import requests
 from gtts import gTTS
 from audio_recorder_streamlit import audio_recorder
 from huggingface_hub import InferenceClient
@@ -45,32 +46,39 @@ st.sidebar.markdown("""
 5. AI akan menjawab dalam teks & memutar suara balasan otomatis!
 """)
 
-# Inisialisasi Hugging Face Client jika Token Tersedia
-client = InferenceClient(api_key=HF_TOKEN) if HF_TOKEN else None
-
 # Model Endpoints
 STT_MODEL = "openai/whisper-large-v3-turbo"
 LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 
-# Function: Speech-to-Text (Whisper via SDK)
+# Function: Speech-to-Text via Direct HTTP Request dengan Explicit Content-Type
 def transcribe_audio(audio_bytes):
-    if not client:
+    if not HF_TOKEN:
         return {"error": "Token Hugging Face belum terpasang."}
+    
+    api_url = f"https://api-inference.huggingface.co/models/{STT_MODEL}"
+    headers = {
+        "Authorization": f"Bearer {HF_TOKEN}",
+        "Content-Type": "audio/wav"
+    }
+    
     try:
-        res = client.automatic_speech_recognition(
-            audio=audio_bytes,
-            model=STT_MODEL
-        )
-        if hasattr(res, "text"):
-            return {"text": res.text}
-        return {"text": str(res)}
+        response = requests.post(api_url, headers=headers, data=audio_bytes)
+        result = response.json()
+        
+        if response.status_code == 200:
+            return {"text": result.get("text", "")}
+        else:
+            error_msg = result.get("error", f"HTTP {response.status_code}")
+            return {"error": str(error_msg)}
     except Exception as e:
         return {"error": str(e)}
 
 # Function: LLM Response (Qwen via SDK Chat Completion)
 def generate_response(messages):
-    if not client:
+    if not HF_TOKEN:
         return "Error: Token Hugging Face belum terpasang."
+    
+    client = InferenceClient(api_key=HF_TOKEN)
     
     system_prompt = (
         "You are a friendly, encouraging Japanese conversation partner (Kaiwa AI). "
@@ -146,19 +154,22 @@ if audio_bytes:
             
             if isinstance(stt_result, dict) and "error" in stt_result:
                 st.error(f"⚠️ {stt_result['error']}")
-            elif isinstance(stt_result, dict) and "text" in stt_result and stt_result["text"].strip():
+            elif isinstance(stt_result, dict) and stt_result.get("text"):
                 user_speech = stt_result["text"].strip()
                 
-                st.session_state.messages.append({"role": "user", "content": user_speech})
-                with st.chat_message("user"):
-                    st.write(f"🗣️ *\"{user_speech}\"*")
+                if user_speech:
+                    st.session_state.messages.append({"role": "user", "content": user_speech})
+                    with st.chat_message("user"):
+                        st.write(f"🗣️ *\"{user_speech}\"*")
 
-                with st.spinner("🤖 AI sedang memikirkan balasan..."):
-                    bot_reply = generate_response(st.session_state.messages)
+                    with st.spinner("🤖 AI sedang memikirkan balasan..."):
+                        bot_reply = generate_response(st.session_state.messages)
 
-                st.session_state.messages.append({"role": "assistant", "content": bot_reply})
-                with st.chat_message("assistant"):
-                    st.write(bot_reply)
-                    play_audio_autoplay(bot_reply)
+                    st.session_state.messages.append({"role": "assistant", "content": bot_reply})
+                    with st.chat_message("assistant"):
+                        st.write(bot_reply)
+                        play_audio_autoplay(bot_reply)
+                else:
+                    st.warning("Suara tidak terdeteksi. Coba rekam ulang.")
             else:
-                st.warning("Suara tidak terdeteksi. Coba rekam ulang.")
+                st.warning("Gagal memproses suara. Coba rekam ulang.")
