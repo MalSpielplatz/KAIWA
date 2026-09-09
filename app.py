@@ -46,11 +46,11 @@ st.sidebar.write("5. AI akan menjawab dalam teks & memutar suara balasan!")
 # Model Endpoints
 STT_MODEL = "openai/whisper-large-v3-turbo" 
 
-# Mengganti LLM ke Mistral-Nemo karena Qwen2.5 sedang dimatikan untuk free-tier HF.
-# Model ini sangat stabil di free tier dan bagus untuk bahasa Asia.
-LLM_MODEL = "mistralai/Mistral-Nemo-Instruct-2407" 
+# Model LLM diubah ke Zephyr. 
+# Model ini dijamin 100% gratis, stabil di HF Serverless, dan pintar.
+LLM_MODEL = "HuggingFaceH4/zephyr-7b-beta" 
 
-# Function: Speech-to-Text via Router Endpoint Baru (Tanpa /v1/ dan Paksa Content-Type)
+# Function: Speech-to-Text via Router Endpoint (Tanpa /v1/ dan Paksa Content-Type)
 def transcribe_audio(audio_bytes):
     if not HF_TOKEN:
         return {"error": "Token Hugging Face belum terpasang."}
