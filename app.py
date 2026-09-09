@@ -49,7 +49,7 @@ st.sidebar.markdown("""
 STT_MODEL = "openai/whisper-large-v3-turbo"
 LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 
-# Function: Speech-to-Text via InferenceClient (dengan io.BytesIO)
+# Function: Speech-to-Text via InferenceClient.post (Menyuplai Header Content-Type Audio)
 def transcribe_audio(audio_bytes):
     if not HF_TOKEN:
         return {"error": "Token Hugging Face belum terpasang."}
@@ -57,17 +57,22 @@ def transcribe_audio(audio_bytes):
     try:
         client = InferenceClient(token=HF_TOKEN)
         
-        # Konversi bytes murni ke file-like object agar SDK mengenali formatnya
-        audio_file = io.BytesIO(audio_bytes)
-        
-        res = client.automatic_speech_recognition(
-            audio=audio_file,
-            model=STT_MODEL
+        # Kirim binary bytes langsung via client.post dengan header audio/wav
+        response_bytes = client.post(
+            data=audio_bytes,
+            model=STT_MODEL,
+            headers={"Content-Type": "audio/wav"}
         )
         
-        if hasattr(res, "text"):
-            return {"text": res.text}
-        return {"text": str(res)}
+        import json
+        res_json = json.loads(response_bytes.decode("utf-8"))
+        
+        if isinstance(res_json, dict) and "text" in res_json:
+            return {"text": res_json["text"]}
+        elif isinstance(res_json, dict) and "error" in res_json:
+            return {"error": res_json["error"]}
+        return {"text": str(res_json)}
+        
     except Exception as e:
         return {"error": str(e)}
 
