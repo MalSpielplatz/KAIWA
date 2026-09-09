@@ -1,7 +1,7 @@
 import streamlit as st
 import io
 import base64
-import json
+import requests
 from gtts import gTTS
 from audio_recorder_streamlit import audio_recorder
 from huggingface_hub import InferenceClient
@@ -16,10 +16,9 @@ st.set_page_config(
 st.title("🎙️ Speech-to-Speech Japanese Kaiwa")
 st.caption("Ngobrol bahasa Jepang langsung pakai suara secara real-time!")
 
-# --- SIDEBAR CONFIG & INSTRUCTIONS ---
+# --- SIDEBAR CONFIG ---
 st.sidebar.header("⚙️ Konfigurasi & Status")
 
-# Pengambilan HF Token (Dari Secrets atau Sidebar Input)
 SECRET_TOKEN = st.secrets.get("HF_TOKEN", "")
 
 if SECRET_TOKEN:
@@ -36,42 +35,39 @@ else:
     else:
         st.sidebar.warning("⚠️ Masukkan Token HF untuk melanjutkan")
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("""
-### 💡 Cara Pakai:
-1. Pastikan **API Token** sudah terpasang.
-2. Klik ikon **Mikrofon** untuk mulai merekam suara.
-3. Bicara dalam Bahasa Jepang (*misal: Konnichiwa, o-genki desu ka?*).
-4. Klik ikon **Stop** untuk mengirim.
-5. AI akan menjawab dalam teks & memutar suara balasan otomatis!
-""")
-
 # Model Endpoints
 STT_MODEL = "openai/whisper-large-v3-turbo"
 LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 
-# Function: Speech-to-Text via client.request
+# Function: Speech-to-Text via Direct HTTP Requests
 def transcribe_audio(audio_bytes):
     if not HF_TOKEN:
         return {"error": "Token Hugging Face belum terpasang."}
     
+    # Endpoint resmi router Hugging Face
+    api_url = f"https://router.huggingface.co/hf-inference/v1/models/{STT_MODEL}"
+    
+    headers = {
+        "Authorization": f"Bearer {HF_TOKEN}",
+        "Content-Type": "audio/wav"
+    }
+    
     try:
-        client = InferenceClient(token=HF_TOKEN)
+        response = requests.post(api_url, headers=headers, data=audio_bytes)
         
-        response = client.request(
-            data=audio_bytes,
-            model=STT_MODEL,
-            headers={"Content-Type": "audio/wav"}
-        )
-        
-        res_json = json.loads(response.decode("utf-8"))
-        
-        if isinstance(res_json, dict) and "text" in res_json:
-            return {"text": res_json["text"]}
-        elif isinstance(res_json, dict) and "error" in res_json:
-            return {"error": res_json["error"]}
-        return {"text": str(res_json)}
-        
+        if response.status_code == 200:
+            result = response.json()
+            if isinstance(result, dict) and "text" in result:
+                return {"text": result["text"]}
+            return {"text": str(result)}
+        else:
+            try:
+                err_data = response.json()
+                error_msg = err_data.get("error", f"HTTP {response.status_code}")
+            except Exception:
+                error_msg = f"HTTP Error {response.status_code}: {response.text}"
+            return {"error": str(error_msg)}
+            
     except Exception as e:
         return {"error": str(e)}
 
@@ -80,7 +76,7 @@ def generate_response(messages):
     if not HF_TOKEN:
         return "Error: Token Hugging Face belum terpasang."
     
-    client = InferenceClient(token=HF_TOKEN)
+    client = InferenceClient(api_key=HF_TOKEN)
     
     system_prompt = (
         "You are a friendly, encouraging Japanese conversation partner (Kaiwa AI). "
@@ -104,7 +100,7 @@ def generate_response(messages):
     except Exception as e:
         return f"Error LLM: {str(e)}"
 
-# Function: Generate Audio Autoplay HTML
+# Function: Generate Audio Autoplay HTML (gTTS)
 def play_audio_autoplay(text_ja):
     try:
         ja_sentence = text_ja.split("\n")[0]
