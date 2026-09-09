@@ -1,6 +1,7 @@
 import streamlit as st
 import io
 import base64
+import requests
 from gtts import gTTS
 from audio_recorder_streamlit import audio_recorder
 from huggingface_hub import InferenceClient
@@ -43,28 +44,45 @@ st.sidebar.write("4. Klik ikon Stop untuk mengirim.")
 st.sidebar.write("5. AI akan menjawab dalam teks & memutar suara balasan!")
 
 # Model Endpoints
-STT_MODEL = "openai/whisper-large-v3-turbo"
+STT_MODEL = "openai/whisper-large-v3-turbo" # Menggunakan Whisper terbaru (lebih cepat)
 LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 
-# Function: Speech-to-Text via InferenceClient (Lebih Ringkas & Stabil)
+# Function: Speech-to-Text via Requests (Memaksa Content-Type: audio/wav)
 def transcribe_audio(audio_bytes):
     if not HF_TOKEN:
         return {"error": "Token Hugging Face belum terpasang."}
     
+    # Endpoint standar inference tanpa /v1/
+    api_url = f"https://api-inference.huggingface.co/models/{STT_MODEL}"
+    
+    headers = {
+        "Authorization": f"Bearer {HF_TOKEN}",
+        "Content-Type": "audio/wav"
+    }
+    
     try:
-        # Inisialisasi SDK InferenceClient
-        client = InferenceClient(api_key=HF_TOKEN)
+        response = requests.post(api_url, headers=headers, data=audio_bytes)
         
-        # Panggil tugas STT secara instan
-        result = client.automatic_speech_recognition(
-            audio=audio_bytes, 
-            model=STT_MODEL
-        )
-        
-        return {"text": result.text}
+        if response.status_code == 200:
+            result = response.json()
+            
+            # Format balasan HF bisa berupa Dictionary atau List tergantung model
+            if isinstance(result, dict) and "text" in result:
+                return {"text": result["text"]}
+            elif isinstance(result, list) and len(result) > 0 and "text" in result[0]:
+                return {"text": result[0]["text"]}
+                
+            return {"text": str(result)}
+        else:
+            try:
+                err_data = response.json()
+                error_msg = err_data.get("error", f"HTTP {response.status_code}")
+            except Exception:
+                error_msg = f"HTTP Error {response.status_code}: {response.text}"
+            return {"error": str(error_msg)}
             
     except Exception as e:
-        return {"error": f"Error STT: {str(e)}"}
+        return {"error": str(e)}
 
 # Function: LLM Response (Qwen via SDK Chat Completion)
 def generate_response(messages):
@@ -98,6 +116,7 @@ def generate_response(messages):
 # Function: Generate Audio Autoplay HTML (gTTS)
 def play_audio_autoplay(text_ja):
     try:
+        # Hanya ambil kalimat baris pertama (hiragana/kanji) agar romaji/inggris tidak ikut dibaca
         ja_sentence = text_ja.split("\n")[0]
         tts = gTTS(text=ja_sentence, lang="ja")
         fp = io.BytesIO()
