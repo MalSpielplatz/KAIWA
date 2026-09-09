@@ -13,7 +13,7 @@ st.set_page_config(
 )
 
 st.title("🎙️ Speech-to-Speech Japanese Kaiwa")
-st.caption("Ngobrol bahasa Jepang langsung pakai suara dengan penjelasan Bahasa Indonesia!")
+st.caption("Ngobrol bahasa Jepang langsung pakai suara dengan alur percakapan natural!")
 
 # --- SIDEBAR CONFIG ---
 st.sidebar.header("⚙️ Konfigurasi & Status")
@@ -39,7 +39,7 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("💡 Cara Pakai:")
 st.sidebar.write("1. Rekam suara Anda menggunakan perekam di bawah.")
 st.sidebar.write("2. Dengarkan hasil rekaman, lalu klik tombol Kirim.")
-st.sidebar.write("3. AI akan menjawab dalam Bahasa Jepang beserta penjelasan Romaji & Terjemahan Bahasa Indonesia.")
+st.sidebar.write("3. AI akan menjawab dalam Bahasa Jepang (beserta terjemahan ID di dalam kurung) dan memberikan pertanyaan lanjutan.")
 
 # --- MODEL / PROVIDER CONFIG ---
 STT_MODEL = "openai/whisper-large-v3-turbo"
@@ -78,7 +78,7 @@ def transcribe_audio(audio_bytes):
     except Exception as e:
         return {"error": str(e)}
 
-# Function: LLM Response dengan format terstruktur Bahasa Indonesia
+# Function: LLM Response dengan format baru (Terjemahan ID di kurung + Pertanyaan Lanjutan)
 def generate_response(messages):
     if not HF_TOKEN:
         return "Error: Token Hugging Face belum terpasang."
@@ -89,10 +89,9 @@ def generate_response(messages):
         system_prompt = (
             "You are a friendly, encouraging Japanese conversation partner (Kaiwa AI). "
             "Always respond naturally in Japanese suitable for language learners. "
-            "You must structure your response in exactly three lines/sections without English translation inside the parentheses:\n"
-            "1. Japanese response (Kanji/Kana)\n"
-            "2. Romaji reading only\n"
-            "3. Terjemahan dalam Bahasa Indonesia"
+            "You must structure your response in exactly two lines:\n"
+            "Line 1: Japanese response followed immediately by its translation in Bahasa Indonesia inside parentheses, like: [Japanese sentence] (Terjemahan dalam Bahasa Indonesia)\n"
+            "Line 2: A follow-up question in Japanese to keep the conversation going."
         )
 
         formatted_messages = [{"role": "system", "content": system_prompt}]
@@ -110,7 +109,7 @@ def generate_response(messages):
     except Exception as e:
         return f"Error LLM: {str(e)}"
 
-# Function: Generate Audio Autoplay HTML (gTTS)
+# Function: Generate Audio Autoplay HTML (gTTS) - Membaca baris pertama saja
 def play_audio_autoplay(text_ja):
     try:
         ja_sentence = text_ja.split("\n")[0]
@@ -132,18 +131,17 @@ def play_audio_autoplay(text_ja):
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {"role": "system", "content": "System Initialized"},
-        {"role": "assistant", "content": "こんにちは！一緒に日本語を練習しましょう！\n(Konnichiwa! Issho ni Nihongo wo renshuu shimashou!)\nHalo! Mari kita berlatih bahasa Jepang bersama-sama!"}
+        {"role": "assistant", "content": "こんにちは！一緒に日本語を練習しましょう！ (Halo! Mari kita berlatih bahasa Jepang bersama-sama!)\n最近はどうですか？"}
     ]
 
-# Tampilkan Chat History dengan pemisahan visual yang rapi
+# Tampilkan Chat History dengan struktur baru
 for msg in st.session_state.messages:
     if msg["role"] != "system":
         with st.chat_message(msg["role"]):
             if msg["role"] == "assistant":
                 lines = msg["content"].split("\n")
-                st.markdown(f"**🇯🇵 Jepang:** {lines[0] if len(lines) > 0 else ''}")
-                st.markdown(f"**罗马字 Romaji:** {lines[1] if len(lines) > 1 else ''}")
-                st.markdown(f"**🇮🇩 Penjelasan (ID):** {lines[2] if len(lines) > 2 else ''}")
+                st.markdown(f"**🇯🇵 Balasan:** {lines[0] if len(lines) > 0 else ''}")
+                st.markdown(f"**❓ Pertanyaan Lanjutan:** {lines[1] if len(lines) > 1 else ''}")
             else:
                 st.write(msg["content"])
 
@@ -180,9 +178,8 @@ if audio_file is not None:
                         
                         with st.chat_message("assistant"):
                             lines = bot_reply.split("\n")
-                            st.markdown(f"**🇯🇵 Jepang:** {lines[0] if len(lines) > 0 else ''}")
-                            st.markdown(f"**罗马字 Romaji:** {lines[1] if len(lines) > 1 else ''}")
-                            st.markdown(f"**🇮🇩 Penjelasan (ID):** {lines[2] if len(lines) > 2 else ''}")
+                            st.markdown(f"**🇯🇵 Balasan:** {lines[0] if len(lines) > 0 else ''}")
+                            st.markdown(f"**❓ Pertanyaan Lanjutan:** {lines[1] if len(lines) > 1 else ''}")
                             play_audio_autoplay(bot_reply)
                         
                         st.rerun()
