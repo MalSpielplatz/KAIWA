@@ -44,8 +44,15 @@ st.sidebar.write("3. AI akan menjawab dengan format Respond + Question, plus sua
 
 # --- MODEL / PROVIDER CONFIG ---
 STT_MODEL = "openai/whisper-large-v3-turbo"
-LLM_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
-LLM_PROVIDER = "featherless-ai"
+
+# Model lebih besar (72B) dari keluarga Qwen -> instruction-following stabil,
+# dan Qwen dikenal punya dukungan bahasa Jepang yang kuat (bukan turunan Llama).
+LLM_MODEL = "Qwen/Qwen2.5-72B-Instruct"
+
+# Fallback berurutan: kalau satu provider tidak lagi menghost model ini
+# (ketersediaan provider di HF suka berubah), otomatis coba yang berikutnya
+# alih-alih app langsung error total.
+LLM_PROVIDERS_TO_TRY = ["auto", "novita", "together", "nebius", "fireworks-ai", "deepinfra"]
 
 
 # Function: Speech-to-Text via Router Endpoint
@@ -94,37 +101,58 @@ def transcribe_audio(audio_bytes):
         return {"error": str(e)}
 
 
+# Utility: buang semua isi dalam kurung (biasa maupun kurung Jepang).
+# Ini jaring pengaman kalau model tetap nyelipin romaji/terjemahan meski sudah
+# dilarang di prompt - model kecil seperti Llama-3.1-8B tidak selalu 100% patuh
+# ke instruksi format, jadi kita bersihkan manual di kode, bukan cuma andalkan prompt.
+def strip_parentheticals(text):
+    text = re.sub(r"\([^)]*\)", "", text)
+    text = re.sub(r"（[^）]*）", "", text)
+    return re.sub(r"[ \t]+", " ", text).strip()
+
+
 # Function: LLM Response
 # System prompt dipaksa strict 2 baris: "Respond :" dan "Question :"
 def generate_response(messages):
     if not HF_TOKEN:
         return "Error: Token Hugging Face belum terpasang."
 
-    try:
-        client = InferenceClient(provider=LLM_PROVIDER, api_key=HF_TOKEN)
+    system_prompt = (
+        "You are a friendly Japanese conversation partner (Kaiwa AI) for language learners. "
+        "You MUST reply in EXACTLY this two-line format and NOTHING else - "
+        "no romaji, no English translation, no parentheses, no extra commentary:\n"
+        "Respond : <short natural reaction, in Japanese script only>\n"
+        "Question : <one short natural follow-up question, in Japanese script only>\n\n"
+        "Example of a CORRECT reply:\n"
+        "Respond : 元気です！\n"
+        "Question : 今日は何をしましたか？\n\n"
+        "Example of an INCORRECT reply (never do this):\n"
+        "Respond : 元気です！(Genki desu! / I'm doing well!)\n"
+        "Question : 今日は何をしましたか？(Kyō wa nani o shimashita ka? / What did you do today?)"
+    )
 
-        system_prompt = (
-            "You are a friendly Japanese conversation partner (Kaiwa AI) for language learners. "
-            "You MUST reply in EXACTLY this two-line format, nothing else, no extra explanation:\n"
-            "Respond : <a short natural reaction in Japanese, written in hiragana/katakana/kanji>\n"
-            "Question : <one short natural follow-up question in Japanese, written in hiragana/katakana/kanji>\n"
-            "Never add romaji, translation, or any other text outside these two lines."
-        )
+    formatted_messages = [{"role": "system", "content": system_prompt}]
+    for msg in messages:
+        if msg["role"] != "system":
+            formatted_messages.append({"role": msg["role"], "content": msg["content"]})
 
-        formatted_messages = [{"role": "system", "content": system_prompt}]
-        for msg in messages:
-            if msg["role"] != "system":
-                formatted_messages.append({"role": msg["role"], "content": msg["content"]})
+    last_error = None
+    for provider in LLM_PROVIDERS_TO_TRY:
+        try:
+            client = InferenceClient(provider=provider, api_key=HF_TOKEN)
+            response = client.chat_completion(
+                messages=formatted_messages,
+                model=LLM_MODEL,
+                max_tokens=150,
+                temperature=0.7
+            )
+            raw_reply = response.choices[0].message.content.strip()
+            return strip_parentheticals(raw_reply)
+        except Exception as e:
+            last_error = e
+            continue
 
-        response = client.chat_completion(
-            messages=formatted_messages,
-            model=LLM_MODEL,
-            max_tokens=150,
-            temperature=0.7
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        return f"Error LLM: {str(e)}"
+    return f"Error LLM: semua provider gagal dicoba ({', '.join(LLM_PROVIDERS_TO_TRY)}). Detail terakhir: {last_error}"
 
 
 # Function: Generate Audio Autoplay HTML (gTTS)
