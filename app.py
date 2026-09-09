@@ -44,16 +44,16 @@ st.sidebar.write("4. Klik ikon Stop untuk mengirim.")
 st.sidebar.write("5. AI akan menjawab dalam teks & memutar suara balasan!")
 
 # Model Endpoints
-STT_MODEL = "openai/whisper-large-v3-turbo" # Menggunakan Whisper terbaru (lebih cepat)
+STT_MODEL = "openai/whisper-large-v3-turbo" 
 LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 
-# Function: Speech-to-Text via Requests (Memaksa Content-Type: audio/wav)
+# Function: Speech-to-Text via Router Endpoint Baru (Tanpa /v1/ dan Paksa Content-Type)
 def transcribe_audio(audio_bytes):
     if not HF_TOKEN:
         return {"error": "Token Hugging Face belum terpasang."}
     
-    # Endpoint standar inference tanpa /v1/
-    api_url = f"https://api-inference.huggingface.co/models/{STT_MODEL}"
+    # Gunakan domain router modern TANPA path /v1/
+    api_url = f"https://router.huggingface.co/hf-inference/models/{STT_MODEL}"
     
     headers = {
         "Authorization": f"Bearer {HF_TOKEN}",
@@ -66,7 +66,6 @@ def transcribe_audio(audio_bytes):
         if response.status_code == 200:
             result = response.json()
             
-            # Format balasan HF bisa berupa Dictionary atau List tergantung model
             if isinstance(result, dict) and "text" in result:
                 return {"text": result["text"]}
             elif isinstance(result, list) and len(result) > 0 and "text" in result[0]:
@@ -116,7 +115,7 @@ def generate_response(messages):
 # Function: Generate Audio Autoplay HTML (gTTS)
 def play_audio_autoplay(text_ja):
     try:
-        # Hanya ambil kalimat baris pertama (hiragana/kanji) agar romaji/inggris tidak ikut dibaca
+        # Hanya ambil kalimat baris pertama (hiragana/kanji)
         ja_sentence = text_ja.split("\n")[0]
         tts = gTTS(text=ja_sentence, lang="ja")
         fp = io.BytesIO()
