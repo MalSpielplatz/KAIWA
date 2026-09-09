@@ -1,7 +1,7 @@
 import streamlit as st
 import io
 import base64
-from gTTS import gTTS
+from gtts import gTTS
 from audio_recorder_streamlit import audio_recorder
 from huggingface_hub import InferenceClient
 
