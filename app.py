@@ -1,3 +1,8 @@
+Mohon maaf atas kekeliruannya. Kamu benar, penulisan nama paket/modul untuk impor gTTS memang menggunakan huruf kecil `from gtts import gTTS`.
+
+Berikut adalah seluruh isi kode `app.py` terbaru dan lengkap yang sudah disesuaikan:
+
+```python
 import streamlit as st
 import io
 import base64
@@ -134,8 +139,8 @@ audio_bytes = audio_recorder(
     icon_size="2x"
 )
 
-# Process Audio
-if audio_bytes:
+# Process Audio (Hanya diproses jika data audio tidak kosong)
+if audio_bytes is not None and len(audio_bytes) > 0:
     if not HF_TOKEN:
         st.error("⚠️ Masukkan Hugging Face Token di sidebar terlebih dahulu!")
     else:
@@ -164,4 +169,6 @@ if audio_bytes:
                         st.write(bot_reply)
                         play_audio_autoplay(bot_reply)
                 else:
-                    st.warning("Suara tidak terdeteksi. Coba rekam ulang.")
+                    st.warning("Suara tidak terdeteksi atau terlalu singkat. Coba rekam ulang.")
+
+```
