@@ -165,5 +165,3 @@ if audio_bytes is not None and len(audio_bytes) > 0:
                         play_audio_autoplay(bot_reply)
                 else:
                     st.warning("Suara tidak terdeteksi atau terlalu singkat. Coba rekam ulang.")
-
-```
