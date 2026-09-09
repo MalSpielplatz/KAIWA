@@ -86,7 +86,7 @@ def transcribe_audio(audio_bytes):
         return {"error": str(e)}
 
 
-# Function: LLM Response (InferenceClient dengan provider eksplisit & terjemahan Bahasa Indonesia)
+# Function: LLM Response (Kembali menggunakan system prompt asli yang stabil)
 def generate_response(messages):
     if not HF_TOKEN:
         return "Error: Token Hugging Face belum terpasang."
@@ -97,8 +97,7 @@ def generate_response(messages):
         system_prompt = (
             "You are a friendly, encouraging Japanese conversation partner (Kaiwa AI). "
             "Always respond naturally in Japanese suitable for language learners. "
-            "Line 1: Japanese response (Kanji/Kana) followed by its translation in Bahasa Indonesia inside parentheses. "
-            "Line 2: Romaji reading."
+            "On a new line below the Japanese text, provide Romaji and English translation for learning."
         )
 
         formatted_messages = [{"role": "system", "content": system_prompt}]
@@ -141,7 +140,7 @@ def play_audio_autoplay(text_ja):
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {"role": "system", "content": "System Initialized"},
-        {"role": "assistant", "content": "こんにちは！一緒に日本語を練習しましょう！ (Halo! Mari kita berlatih bahasa Jepang bersama-sama!)\n(Konnichiwa! Issho ni Nihongo wo renshuu shimashou!)"}
+        {"role": "assistant", "content": "こんにちは！一緒に日本語を練習しましょう！\n(Konnichiwa! Issho ni Nihongo wo renshuu shimashou! / Hello! Let's practice Japanese together!)"}
     ]
 
 # Tampilkan Chat History
@@ -152,7 +151,7 @@ for msg in st.session_state.messages:
 
 st.divider()
 
-# Audio Recorder Container (Menggunakan kode stabil pilihan Anda)
+# Audio Recorder Container
 st.markdown("### 🗣️ Bicara Sekarang:")
 audio_bytes = audio_recorder(
     text="Klik untuk Merekam",
