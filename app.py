@@ -46,8 +46,8 @@ st.sidebar.write("5. AI akan menjawab dalam teks & memutar suara balasan!")
 # Model Endpoints
 STT_MODEL = "openai/whisper-large-v3-turbo" 
 
-# Menggunakan Llama-3-8B-Instruct (Multilingual kuat dan stabil di serverless HF)
-LLM_MODEL = "meta-llama/Meta-Llama-3-8B-Instruct" 
+# Menggunakan Qwen2.5-7B-Instruct yang sangat natural untuk bahasa Jepang
+LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 
 # Function: Speech-to-Text via Router Endpoint (Tanpa /v1/ dan Paksa Content-Type)
 def transcribe_audio(audio_bytes):
@@ -84,25 +84,26 @@ def transcribe_audio(audio_bytes):
     except Exception as e:
         return {"error": str(e)}
 
-# Function: LLM Response (via SDK Chat Completion)
+# Function: LLM Response (menggunakan InferenceClient dengan provider otomatis)
 def generate_response(messages):
     if not HF_TOKEN:
         return "Error: Token Hugging Face belum terpasang."
     
-    client = InferenceClient(api_key=HF_TOKEN)
-    
-    system_prompt = (
-        "You are a friendly, encouraging Japanese conversation partner (Kaiwa AI). "
-        "Always respond naturally in Japanese suitable for language learners. "
-        "On a new line below the Japanese text, provide Romaji and English translation for learning."
-    )
-    
-    formatted_messages = [{"role": "system", "content": system_prompt}]
-    for msg in messages:
-        if msg["role"] != "system":
-            formatted_messages.append({"role": msg["role"], "content": msg["content"]})
-
     try:
+        # Menggunakan provider="auto" agar klien mencari jalur inference yang aktif secara otomatis
+        client = InferenceClient(provider="auto", api_key=HF_TOKEN)
+        
+        system_prompt = (
+            "You are a friendly, encouraging Japanese conversation partner (Kaiwa AI). "
+            "Always respond naturally in Japanese suitable for language learners. "
+            "On a new line below the Japanese text, provide Romaji and English translation for learning."
+        )
+        
+        formatted_messages = [{"role": "system", "content": system_prompt}]
+        for msg in messages:
+            if msg["role"] != "system":
+                formatted_messages.append({"role": msg["role"], "content": msg["content"]})
+
         response = client.chat_completion(
             messages=formatted_messages,
             model=LLM_MODEL,
