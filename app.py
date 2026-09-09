@@ -1,7 +1,7 @@
 import streamlit as st
 import io
 import base64
-from gtts import gTTS
+from gTTS import gTTS
 from audio_recorder_streamlit import audio_recorder
 from huggingface_hub import InferenceClient
 
@@ -15,14 +15,14 @@ st.set_page_config(
 st.title("🎙️ Speech-to-Speech Japanese Kaiwa")
 st.caption("Ngobrol bahasa Jepang langsung pakai suara secara real-time!")
 
-# Token Hugging Face dari Secrets
+# Mengambil HF Token dari Secrets / Hardcode Fallback
 HF_TOKEN = st.secrets.get("HF_TOKEN", "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")
 
 st.sidebar.header("⚙️ Status App")
 st.sidebar.success("✅ Hugging Face Token Terpasang")
 
-# Inisialisasi Hugging Face Inference Client Resmi
-client = InferenceClient(token=HF_TOKEN)
+# Inisialisasi Client SDK Resmi Hugging Face
+client = InferenceClient(provider="hf-inference", api_key=HF_TOKEN)
 
 # Model
 STT_MODEL = "openai/whisper-large-v3-turbo"
@@ -31,12 +31,11 @@ LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 # Function: Speech-to-Text (Whisper via SDK)
 def transcribe_audio(audio_bytes):
     try:
-        # Mengirim audio langsung ke client Hugging Face
-        text = client.automatic_speech_recognition(
+        res = client.automatic_speech_recognition(
             audio=audio_bytes,
             model=STT_MODEL
         )
-        return {"text": text}
+        return {"text": res}
     except Exception as e:
         return {"error": str(e)}
 
@@ -54,7 +53,6 @@ def generate_response(messages):
             formatted_messages.append({"role": msg["role"], "content": msg["content"]})
 
     try:
-        # Menggunakan Chat Completions API bawaan HF Router
         response = client.chat_completion(
             messages=formatted_messages,
             model=LLM_MODEL,
@@ -115,7 +113,6 @@ if audio_bytes:
         if isinstance(stt_result, dict) and "error" in stt_result:
             st.error(f"⚠️ {stt_result['error']}")
         elif isinstance(stt_result, dict) and "text" in stt_result and stt_result["text"]:
-            # Jika hasil Whisper berupa objek, ambil string text-nya
             user_speech = stt_result["text"]
             if hasattr(user_speech, "text"):
                 user_speech = user_speech.text
