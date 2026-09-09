@@ -1,4 +1,4 @@
 streamlit
-requests
-gtts
+gTTS
 audio-recorder-streamlit
+huggingface_hub
