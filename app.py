@@ -28,7 +28,8 @@ else:
     HF_TOKEN = st.sidebar.text_input(
         "Hugging Face API Token",
         type="password",
-        help="Masukkan Access Token Hugging Face kamu (berawalan hf_)"
+        help="Masukkan Access Token Hugging Face kamu (berawalan hf_). "
+             "Pastikan token punya izin 'Make calls to Inference Providers'."
     )
     if HF_TOKEN:
         st.sidebar.success("✅ Token Manual Terpasang")
@@ -43,35 +44,44 @@ st.sidebar.write("3. Bicara dalam Bahasa Jepang (*misal: Konnichiwa*).")
 st.sidebar.write("4. Klik ikon Stop untuk mengirim.")
 st.sidebar.write("5. AI akan menjawab dalam teks & memutar suara balasan!")
 
-# Model Endpoints
-STT_MODEL = "openai/whisper-large-v3-turbo" 
+# --- MODEL / PROVIDER CONFIG ---
+# STT: hf-inference masih melayani task ASR/CPU-light seperti ini,
+# jadi endpoint router langsung (raw bytes) tetap dipakai.
+STT_MODEL = "openai/whisper-large-v3-turbo"
 
-# Menggunakan Gemma 2 9B (Stabil, gratis, sangat natural untuk bahasa Jepang)
-LLM_MODEL = "google/gemma-2-9b-it"
+# LLM: chat model besar SUDAH TIDAK dilayani hf-inference (tier gratis default).
+# Harus lewat provider pihak ketiga yang eksplisit. Kombinasi ini didokumentasikan
+# resmi oleh HuggingFace sebagai contoh yang berjalan.
+# Jika suatu saat kombinasi ini error lagi (ketersediaan provider berubah-ubah),
+# cek dulu di https://huggingface.co/playground untuk cari pasangan model+provider
+# yang masih hidup, lalu ganti dua variabel di bawah ini.
+LLM_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
+LLM_PROVIDER = "featherless-ai"
 
-# Function: Speech-to-Text via Router Endpoint (Tanpa /v1/ dan Paksa Content-Type)
+
+# Function: Speech-to-Text via Router Endpoint (raw bytes, hf-inference)
 def transcribe_audio(audio_bytes):
     if not HF_TOKEN:
         return {"error": "Token Hugging Face belum terpasang."}
-    
+
     api_url = f"https://router.huggingface.co/hf-inference/models/{STT_MODEL}"
-    
+
     headers = {
         "Authorization": f"Bearer {HF_TOKEN}",
         "Content-Type": "audio/wav"
     }
-    
+
     try:
-        response = requests.post(api_url, headers=headers, data=audio_bytes)
-        
+        response = requests.post(api_url, headers=headers, data=audio_bytes, timeout=60)
+
         if response.status_code == 200:
             result = response.json()
-            
+
             if isinstance(result, dict) and "text" in result:
                 return {"text": result["text"]}
             elif isinstance(result, list) and len(result) > 0 and "text" in result[0]:
                 return {"text": result[0]["text"]}
-                
+
             return {"text": str(result)}
         else:
             try:
@@ -80,24 +90,31 @@ def transcribe_audio(audio_bytes):
             except Exception:
                 error_msg = f"HTTP Error {response.status_code}: {response.text}"
             return {"error": str(error_msg)}
-            
+
     except Exception as e:
         return {"error": str(e)}
 
-# Function: LLM Response (menggunakan InferenceClient standar)
+
+# Function: LLM Response (InferenceClient dengan provider eksplisit)
 def generate_response(messages):
     if not HF_TOKEN:
         return "Error: Token Hugging Face belum terpasang."
-    
+
     try:
-        client = InferenceClient(api_key=HF_TOKEN)
-        
+        # provider di-set eksplisit -> jangan andalkan "auto", supaya
+        # perilakunya konsisten dan tidak jatuh ke provider yang tidak
+        # mendukung model ini.
+        client = InferenceClient(provider=LLM_PROVIDER, api_key=HF_TOKEN)
+
         system_prompt = (
             "You are a friendly, encouraging Japanese conversation partner (Kaiwa AI). "
             "Always respond naturally in Japanese suitable for language learners. "
             "On a new line below the Japanese text, provide Romaji and English translation for learning."
         )
-        
+
+        # Llama-3.1-Instruct mendukung role "system" secara native, jadi ini aman.
+        # (Catatan: kalau nanti ganti ke model keluarga Gemma, role system harus
+        # digabung ke pesan user pertama karena template chat Gemma menolaknya.)
         formatted_messages = [{"role": "system", "content": system_prompt}]
         for msg in messages:
             if msg["role"] != "system":
@@ -112,6 +129,7 @@ def generate_response(messages):
         return response.choices[0].message.content
     except Exception as e:
         return f"Error LLM: {str(e)}"
+
 
 # Function: Generate Audio Autoplay HTML (gTTS)
 def play_audio_autoplay(text_ja):
@@ -131,6 +149,7 @@ def play_audio_autoplay(text_ja):
         st.components.v1.html(audio_html, height=0)
     except Exception as e:
         st.warning(f"Gagal memutar audio: {e}")
+
 
 # Initialize Chat History
 if "messages" not in st.session_state:
@@ -163,12 +182,12 @@ if audio_bytes:
     else:
         with st.spinner("🎙️ Mengubah suara ke teks..."):
             stt_result = transcribe_audio(audio_bytes)
-            
+
             if isinstance(stt_result, dict) and "error" in stt_result:
                 st.error(f"⚠️ {stt_result['error']}")
             elif isinstance(stt_result, dict) and stt_result.get("text"):
                 user_speech = stt_result["text"].strip()
-                
+
                 if user_speech:
                     st.session_state.messages.append({"role": "user", "content": user_speech})
                     with st.chat_message("user"):
