@@ -89,6 +89,8 @@ def generate_response(messages):
         system_prompt = (
             "You are a friendly, encouraging Japanese conversation partner (Kaiwa AI). "
             "Always respond naturally in Japanese suitable for language learners, and always ask a follow-up question to keep the conversation going. "
+            "Respon with only one question"
+            ""
         )
 
         formatted_messages = [{"role": "system", "content": system_prompt}]
