@@ -1,6 +1,7 @@
 import streamlit as st
 import io
 import base64
+import json
 from gtts import gTTS
 from audio_recorder_streamlit import audio_recorder
 from huggingface_hub import InferenceClient
@@ -49,7 +50,7 @@ st.sidebar.markdown("""
 STT_MODEL = "openai/whisper-large-v3-turbo"
 LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 
-# Function: Speech-to-Text via InferenceClient.post (Menyuplai Header Content-Type Audio)
+# Function: Speech-to-Text via client.request
 def transcribe_audio(audio_bytes):
     if not HF_TOKEN:
         return {"error": "Token Hugging Face belum terpasang."}
@@ -57,15 +58,13 @@ def transcribe_audio(audio_bytes):
     try:
         client = InferenceClient(token=HF_TOKEN)
         
-        # Kirim binary bytes langsung via client.post dengan header audio/wav
-        response_bytes = client.post(
+        response = client.request(
             data=audio_bytes,
             model=STT_MODEL,
             headers={"Content-Type": "audio/wav"}
         )
         
-        import json
-        res_json = json.loads(response_bytes.decode("utf-8"))
+        res_json = json.loads(response.decode("utf-8"))
         
         if isinstance(res_json, dict) and "text" in res_json:
             return {"text": res_json["text"]}
