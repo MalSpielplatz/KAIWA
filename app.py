@@ -45,14 +45,16 @@ st.sidebar.write("5. AI akan menjawab dalam teks & memutar suara balasan!")
 
 # Model Endpoints
 STT_MODEL = "openai/whisper-large-v3-turbo" 
-LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"
+
+# Mengganti LLM ke Mistral-Nemo karena Qwen2.5 sedang dimatikan untuk free-tier HF.
+# Model ini sangat stabil di free tier dan bagus untuk bahasa Asia.
+LLM_MODEL = "mistralai/Mistral-Nemo-Instruct-2407" 
 
 # Function: Speech-to-Text via Router Endpoint Baru (Tanpa /v1/ dan Paksa Content-Type)
 def transcribe_audio(audio_bytes):
     if not HF_TOKEN:
         return {"error": "Token Hugging Face belum terpasang."}
     
-    # Gunakan domain router modern TANPA path /v1/
     api_url = f"https://router.huggingface.co/hf-inference/models/{STT_MODEL}"
     
     headers = {
@@ -83,7 +85,7 @@ def transcribe_audio(audio_bytes):
     except Exception as e:
         return {"error": str(e)}
 
-# Function: LLM Response (Qwen via SDK Chat Completion)
+# Function: LLM Response (via SDK Chat Completion)
 def generate_response(messages):
     if not HF_TOKEN:
         return "Error: Token Hugging Face belum terpasang."
