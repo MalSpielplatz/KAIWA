@@ -35,18 +35,24 @@ else:
     else:
         st.sidebar.warning("⚠️ Masukkan Token HF untuk melanjutkan")
 
-# Model Endpoints
-STT_MODEL = "openai/whisper-large-v3-turbo"
+st.sidebar.markdown("---")
+st.sidebar.subheader("💡 Cara Pakai:")
+st.sidebar.write("1. Pastikan API Token sudah terpasang.")
+st.sidebar.write("2. Klik ikon Mikrofon untuk mulai merekam suara.")
+st.sidebar.write("3. Bicara dalam Bahasa Jepang (*misal: Konnichiwa*).")
+st.sidebar.write("4. Klik ikon Stop untuk mengirim.")
+st.sidebar.write("5. AI akan menjawab dalam teks & memutar suara balasan!")
+
+# Model Endpoints yang Didukung Free Tier
+STT_MODEL = "openai/whisper-small"
 LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 
-# Function: Speech-to-Text via Direct HTTP Requests
+# Function: Speech-to-Text via Direct Requests
 def transcribe_audio(audio_bytes):
     if not HF_TOKEN:
         return {"error": "Token Hugging Face belum terpasang."}
     
-    # Endpoint resmi router Hugging Face
-    api_url = f"https://router.huggingface.co/hf-inference/v1/models/{STT_MODEL}"
-    
+    api_url = f"https://api-inference.huggingface.co/models/{STT_MODEL}"
     headers = {
         "Authorization": f"Bearer {HF_TOKEN}",
         "Content-Type": "audio/wav"
