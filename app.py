@@ -1,8 +1,3 @@
-Mohon maaf atas kekeliruannya. Kamu benar, penulisan nama paket/modul untuk impor gTTS memang menggunakan huruf kecil `from gtts import gTTS`.
-
-Berikut adalah seluruh isi kode `app.py` terbaru dan lengkap yang sudah disesuaikan:
-
-```python
 import streamlit as st
 import io
 import base64
