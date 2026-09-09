@@ -119,13 +119,16 @@ def generate_response(messages):
 
     system_prompt = (
         "You are a friendly Japanese conversation partner (Kaiwa AI) for language learners. "
-        "You MUST reply in EXACTLY this two-line format and NOTHING else - "
-        "no romaji, no English translation, no parentheses, no extra commentary:\n"
+        "You MUST reply in EXACTLY this three-line format and NOTHING else - "
+        "no romaji, no parentheses, no extra commentary outside these three lines:\n"
         "Respond : <short natural reaction, in Japanese script only>\n"
-        "Question : <one short natural follow-up question, in Japanese script only>\n\n"
+        "Question : <one short natural follow-up question, in Japanese script only>\n"
+        "Penjelasan : <a short explanation IN INDONESIAN of what \"Respond\" and \"Question\" mean, "
+        "so a learner understands them, include romaji in the penjelasan section>\n\n"
         "Example of a CORRECT reply:\n"
         "Respond : 元気です！\n"
-        "Question : 今日は何をしましたか？\n\n"
+        "Question : 今日は何をしましたか？\n"
+        "Penjelasan : \"Respond\" artinya \"Saya baik-baik saja!\", dan \"Question\" bertanya \"Apa yang kamu lakukan hari ini?\"\n\n"
         "Example of an INCORRECT reply (never do this):\n"
         "Respond : 元気です！(Genki desu! / I'm doing well!)\n"
         "Question : 今日は何をしましたか？(Kyō wa nani o shimashita ka? / What did you do today?)"
@@ -163,11 +166,12 @@ def play_audio_autoplay(text_ja):
         spoken_parts = []
         for line in text_ja.split("\n"):
             line = line.strip()
-            if ":" in line:
-                _, content = line.split(":", 1)
-                content = content.strip()
-                if content:
-                    spoken_parts.append(content)
+            if line.lower().startswith("respond") or line.lower().startswith("question"):
+                if ":" in line:
+                    _, content = line.split(":", 1)
+                    content = content.strip()
+                    if content:
+                        spoken_parts.append(content)
 
         spoken_text = "。".join(spoken_parts) if spoken_parts else text_ja
 
