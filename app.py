@@ -8,13 +8,13 @@ from huggingface_hub import InferenceClient
 
 # Config Halaman
 st.set_page_config(
-    page_title="日本語会話 - Speech-to-Speech Kaiwa AI",
+    page_title="日本語会話 - Speech-to-Speech Kaiwa & Mensetsu AI",
     page_icon="🎙️",
     layout="centered"
 )
 
-st.title("🎙️ Speech-to-Speech Japanese Kaiwa")
-st.caption("Ngobrol bahasa Jepang langsung pakai suara dengan penjelasan Bahasa Indonesia!")
+st.title("🎙️ Speech-to-Speech Japanese Kaiwa & Mensetsu")
+st.caption("Latihan bahasa Jepang lewat suara - mode ngobrol bebas atau simulasi wawancara.")
 
 # --- SIDEBAR CONFIG ---
 st.sidebar.header("⚙️ Konfigurasi & Status")
@@ -37,10 +37,23 @@ else:
         st.sidebar.warning("⚠️ Masukkan Token HF untuk melanjutkan")
 
 st.sidebar.markdown("---")
+st.sidebar.subheader("🎯 Mode Latihan")
+mode = st.sidebar.radio(
+    "Pilih mode:",
+    ["💬 Kaiwa (Bebas)", "🧑‍💼 Mensetsu (Wawancara)"],
+    key="mode_select"
+)
+
+st.sidebar.markdown("---")
 st.sidebar.subheader("💡 Cara Pakai:")
-st.sidebar.write("1. Rekam suara Anda menggunakan perekam di bawah.")
-st.sidebar.write("2. Dengarkan hasil rekaman, lalu klik tombol Kirim.")
-st.sidebar.write("3. AI akan menjawab dengan format Respond + Question, plus suara balasan.")
+if mode == "💬 Kaiwa (Bebas)":
+    st.sidebar.write("1. Rekam suara Anda menggunakan perekam di bawah.")
+    st.sidebar.write("2. Dengarkan hasil rekaman, lalu klik tombol Kirim.")
+    st.sidebar.write("3. AI akan menjawab bebas dengan format Respond + Question, plus suara balasan.")
+else:
+    st.sidebar.write("1. AI akan bertanya duluan (pertanyaan sudah ditentukan/template).")
+    st.sidebar.write("2. Dengarkan pertanyaannya, lalu rekam jawaban Anda dalam Bahasa Jepang.")
+    st.sidebar.write("3. Klik Kirim Jawaban, lanjut ke pertanyaan berikutnya.")
 
 # --- MODEL / PROVIDER CONFIG ---
 STT_MODEL = "openai/whisper-large-v3-turbo"
@@ -53,6 +66,17 @@ LLM_MODEL = "Qwen/Qwen2.5-72B-Instruct"
 # (ketersediaan provider di HF suka berubah), otomatis coba yang berikutnya
 # alih-alih app langsung error total.
 LLM_PROVIDERS_TO_TRY = ["auto", "novita", "together", "nebius", "fireworks-ai", "deepinfra"]
+
+# Daftar pertanyaan template untuk mode Mensetsu (simulasi wawancara kerja).
+MENSETSU_QUESTIONS = [
+    {"ja": "今日の天気はどうですか？", "romaji": "Kyō no tenki wa dō desu ka?", "id": "Bagaimana cuaca hari ini?"},
+    {"ja": "自己紹介をお願いします。", "romaji": "Jiko shōkai o onegaishimasu.", "id": "Tolong perkenalkan diri kamu."},
+    {"ja": "なぜ日本で働きたいのですか？", "romaji": "Naze Nihon de hatarakitai no desu ka?", "id": "Kenapa mau kerja di Jepang?"},
+    {"ja": "日本で何をしたいですか？", "romaji": "Nihon de nani o shitai desu ka?", "id": "Apa aja yang mau kamu lakukan di Jepang?"},
+    {"ja": "日本に行ったことがありますか？", "romaji": "Nihon ni itta koto ga arimasu ka?", "id": "Udah pernah ke Jepang belum?"},
+    {"ja": "あなたの家族構成を説明してください。", "romaji": "Anata no kazoku kōsei o setsumei shite kudasai.", "id": "Jelaskan struktur anggota keluarga kamu."},
+    {"ja": "木材製造の仕事について教えてください。", "romaji": "Mokuzai seizō no shigoto ni tsuite oshiete kudasai.", "id": "Gimana sih pekerjaan manufaktur kayu itu?"},
+]
 
 
 # Function: Speech-to-Text via Router Endpoint
@@ -102,17 +126,16 @@ def transcribe_audio(audio_bytes):
 
 
 # Utility: buang semua isi dalam kurung (biasa maupun kurung Jepang).
-# Ini jaring pengaman kalau model tetap nyelipin romaji/terjemahan meski sudah
-# dilarang di prompt - model kecil seperti Llama-3.1-8B tidak selalu 100% patuh
-# ke instruksi format, jadi kita bersihkan manual di kode, bukan cuma andalkan prompt.
+# Jaring pengaman kalau model tetap nyelipin romaji/terjemahan di dalam kurung
+# meski sudah dilarang di prompt.
 def strip_parentheticals(text):
     text = re.sub(r"\([^)]*\)", "", text)
     text = re.sub(r"（[^）]*）", "", text)
     return re.sub(r"[ \t]+", " ", text).strip()
 
 
-# Function: LLM Response
-# System prompt dipaksa strict 2 baris: "Respond :" dan "Question :"
+# Function: LLM Response (dipakai HANYA untuk mode Kaiwa - Mensetsu pakai
+# pertanyaan template, tidak perlu LLM untuk bertanya).
 def generate_response(messages):
     if not HF_TOKEN:
         return "Error: Token Hugging Face belum terpasang."
@@ -163,8 +186,8 @@ def generate_response(messages):
 
 
 # Function: Generate Audio Autoplay HTML (gTTS)
-# Ambil isi setelah label "Respond :" dan "Question :" (Jepang asli, bukan label-nya)
-# supaya gTTS mengucapkan bahasa Jepang yang benar, lalu gabung jadi satu audio.
+# Ambil isi setelah label "Respond :" dan "Question :" saja (Jepang asli),
+# baris Romaji/Artinya sengaja TIDAK ikut dibacakan.
 def play_audio_autoplay(text_ja):
     try:
         spoken_parts = []
@@ -194,34 +217,33 @@ def play_audio_autoplay(text_ja):
         st.warning(f"Gagal memutar audio: {e}")
 
 
-# Initialize Chat History
-if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {"role": "system", "content": "System Initialized"},
-        {"role": "assistant", "content": "Respond : こんにちは！\nQuestion : 今日は元気ですか？"}
-    ]
+# ============================================================
+# MODE: KAIWA (bebas, user mulai duluan)
+# ============================================================
+def render_kaiwa():
+    if "kaiwa_messages" not in st.session_state:
+        st.session_state.kaiwa_messages = [
+            {"role": "system", "content": "System Initialized"},
+            {"role": "assistant", "content": "Respond : こんにちは！\nRomaji : Konnichiwa!\nArtinya : Halo!\n\nQuestion : 今日は元気ですか？\nRomaji : Kyō wa genki desu ka?\nArtinya : Apa kabar hari ini?"}
+        ]
 
-# Tampilkan Chat History
-for msg in st.session_state.messages:
-    if msg["role"] != "system":
-        with st.chat_message(msg["role"]):
-            st.write(msg["content"])
+    for msg in st.session_state.kaiwa_messages:
+        if msg["role"] != "system":
+            with st.chat_message(msg["role"]):
+                st.write(msg["content"])
 
-st.divider()
+    st.divider()
 
-# Kontrol Perekaman Suara (manual, sebelum dikirim)
-st.markdown("### 🗣️ Rekam Suara Anda:")
-audio_file = st.audio_input("Gunakan mikrofon Anda untuk merekam percakapan")
+    st.markdown("### 🗣️ Rekam Suara Anda:")
+    audio_file = st.audio_input("Gunakan mikrofon Anda untuk merekam percakapan", key="kaiwa_audio")
 
-if audio_file is not None:
-    audio_bytes = audio_file.getvalue()
-
-    if st.button("🚀 Kirim Suara ke AI", type="primary"):
-        if not HF_TOKEN:
-            st.error("⚠️ Masukkan Hugging Face Token di sidebar terlebih dahulu!")
-        else:
-            with st.spinner("🎙️ Menerjemahkan suara Anda..."):
-                stt_result = transcribe_audio(audio_bytes)
+    if audio_file is not None:
+        if st.button("🚀 Kirim Suara ke AI", type="primary", key="kaiwa_send"):
+            if not HF_TOKEN:
+                st.error("⚠️ Masukkan Hugging Face Token di sidebar terlebih dahulu!")
+            else:
+                with st.spinner("🎙️ Menerjemahkan suara Anda..."):
+                    stt_result = transcribe_audio(audio_file.getvalue())
 
                 if isinstance(stt_result, dict) and "error" in stt_result:
                     st.error(f"⚠️ {stt_result['error']}")
@@ -229,14 +251,14 @@ if audio_file is not None:
                     user_speech = stt_result["text"].strip()
 
                     if user_speech:
-                        st.session_state.messages.append({"role": "user", "content": user_speech})
+                        st.session_state.kaiwa_messages.append({"role": "user", "content": user_speech})
                         with st.chat_message("user"):
                             st.write(f"🗣️ *\"{user_speech}\"*")
 
                         with st.spinner("🤖 AI sedang menyusun jawaban..."):
-                            bot_reply = generate_response(st.session_state.messages)
+                            bot_reply = generate_response(st.session_state.kaiwa_messages)
 
-                        st.session_state.messages.append({"role": "assistant", "content": bot_reply})
+                        st.session_state.kaiwa_messages.append({"role": "assistant", "content": bot_reply})
 
                         with st.chat_message("assistant"):
                             st.write(bot_reply)
@@ -247,3 +269,81 @@ if audio_file is not None:
                         st.warning("Suara tidak terdengar jelas. Coba rekam ulang.")
                 else:
                     st.warning("Gagal memproses suara. Coba rekam ulang.")
+
+
+# ============================================================
+# MODE: MENSETSU (wawancara, AI bertanya duluan dari template)
+# ============================================================
+def render_mensetsu():
+    if "mensetsu_idx" not in st.session_state:
+        st.session_state.mensetsu_idx = 0
+    if "mensetsu_log" not in st.session_state:
+        st.session_state.mensetsu_log = []
+    if "mensetsu_played_idx" not in st.session_state:
+        st.session_state.mensetsu_played_idx = -1
+
+    st.markdown("### 🧑‍💼 Simulasi Wawancara Kerja (Mensetsu)")
+    total_q = len(MENSETSU_QUESTIONS)
+
+    # Tampilkan riwayat tanya-jawab yang sudah selesai
+    for entry in st.session_state.mensetsu_log:
+        with st.chat_message(entry["role"]):
+            st.write(entry["content"])
+
+    if st.session_state.mensetsu_idx < total_q:
+        current_q = MENSETSU_QUESTIONS[st.session_state.mensetsu_idx]
+        question_text = (
+            f"Question : {current_q['ja']}\n"
+            f"Romaji : {current_q['romaji']}\n"
+            f"Artinya : {current_q['id']}"
+        )
+
+        with st.chat_message("assistant"):
+            st.write(question_text)
+            # Hanya putar audio sekali per pertanyaan baru, bukan tiap rerun
+            if st.session_state.mensetsu_played_idx != st.session_state.mensetsu_idx:
+                play_audio_autoplay(question_text)
+                st.session_state.mensetsu_played_idx = st.session_state.mensetsu_idx
+
+        st.divider()
+        st.markdown(f"### 🗣️ Jawaban Anda (Pertanyaan {st.session_state.mensetsu_idx + 1}/{total_q}):")
+        mensetsu_audio = st.audio_input(
+            "Rekam jawaban Anda dalam Bahasa Jepang",
+            key=f"mensetsu_audio_{st.session_state.mensetsu_idx}"
+        )
+
+        if mensetsu_audio is not None:
+            if st.button("🚀 Kirim Jawaban", type="primary", key=f"mensetsu_send_{st.session_state.mensetsu_idx}"):
+                if not HF_TOKEN:
+                    st.error("⚠️ Masukkan Hugging Face Token di sidebar terlebih dahulu!")
+                else:
+                    with st.spinner("🎙️ Menerjemahkan jawaban Anda..."):
+                        stt_result = transcribe_audio(mensetsu_audio.getvalue())
+
+                    if isinstance(stt_result, dict) and "error" in stt_result:
+                        st.error(f"⚠️ {stt_result['error']}")
+                    elif isinstance(stt_result, dict) and stt_result.get("text"):
+                        user_answer = stt_result["text"].strip()
+                        if user_answer:
+                            st.session_state.mensetsu_log.append({"role": "assistant", "content": question_text})
+                            st.session_state.mensetsu_log.append({"role": "user", "content": f"🗣️ *\"{user_answer}\"*"})
+                            st.session_state.mensetsu_idx += 1
+                            st.rerun()
+                        else:
+                            st.warning("Suara tidak terdengar jelas. Coba rekam ulang.")
+                    else:
+                        st.warning("Gagal memproses suara. Coba rekam ulang.")
+    else:
+        st.success("🎉 Wawancara selesai! Kerja bagus, otsukaresama deshita!")
+        if st.button("🔄 Ulangi dari Awal"):
+            st.session_state.mensetsu_idx = 0
+            st.session_state.mensetsu_log = []
+            st.session_state.mensetsu_played_idx = -1
+            st.rerun()
+
+
+# --- ROUTING MODE ---
+if mode == "💬 Kaiwa (Bebas)":
+    render_kaiwa()
+else:
+    render_mensetsu()
